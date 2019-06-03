@@ -2,9 +2,11 @@ const puppeteer = require('puppeteer')
 
 let csv = require('csv'); 
 let CSVobj = csv(); 
-
 let urls = []; 
-CSVobj.from.path('./csv_by_postcode/AL1.csv').to.array(function (data) {
+// Capture third argument as postcode.
+const args = process.argv.slice(2);
+const postcode = args[0];
+CSVobj.from.path('./csv_by_postcode/' + postcode + '.csv').to.array(function (data) {
     for (let i = 0; i < data.length; i++) {
         // First iteration it's the csv header, let's skip it.
         if (i == 0) continue;
@@ -20,7 +22,7 @@ void (async () => {
         
     for (let i = 0; i < urls.length; i++) {
         try {  
-            console.log(urls[i]);
+            console.log(`Scraping data from ${urls[i]}`);
             const url = urls[i];
             const page = await browser.newPage();
             await page.waitFor(1000);
@@ -49,28 +51,32 @@ void (async () => {
                     //$('.panel-title a:contains("Individuals")').click();
                     let individualsRows = document.querySelectorAll('.SearchResultsTable tbody tr');
                     if (individualsRows) {
-                        let individualCount = 0;
-                        for(var i = 0; i < individualsRows.length; i++){              
-                            let individual = '';
-                            if (individualCount > 0) {
-                                individual +=  individual + ' / ';
-                            }
-                            let name = individualsRows[i].querySelector("a").textContent;
-                            
-                            individual += name;
-                            
-                            let tds = individualsRows[i].getElementsByTagName("td");
-                            let ind_ref_no = tds[1].textContent;
-                            individual += '-' + ind_ref_no;
-                            
-                            let ind_status = tds[2].textContent;
-                            individual += '-' + ind_status;
-                            individuals += individual;
-                            individualCount++;
+                      let individualCount = 0;
+                      for(var i = 0; i < individualsRows.length; i++){  
+                        if ($(individualsRows[i]).find('td').eq(0).hasClass('dataTables_empty')) {
+                          // There are no individuals in the table. Break out of loop.
+                          break;
+                        }          
+                        let individual = '';
+                        if (individualCount > 0) {
+                          individual +=  individual + ' / ';
                         }
+                        let name = individualsRows[i].querySelector("a").textContent;
+                        
+                        individual += name;
+                        
+                        let tds = individualsRows[i].getElementsByTagName("td");
+                        let ind_ref_no = tds[1].textContent;
+                        individual += '-' + ind_ref_no;
+                        
+                        let ind_status = tds[2].textContent;
+                        individual += '-' + ind_status;
+                        individuals += individual;
+                        individualCount++;
+                      }
                     } 
                     return individuals;
-                }
+                  }
             });
             
             // Check if under permissions accordion tab there is permission to retail investment.
@@ -110,7 +116,7 @@ void (async () => {
 
 
 const createCSV = (data) => {
-    // Uses json2csv package to parse data to csv (https://github.com/zemirco/json2csv).
+    // Use json2csv package https://github.com/zemirco/json2csv
     const { Parser } = require('json2csv');  
     const colHeader = ['Company ref number', 'Individuals', 'Retail Investment permission for advising on investments deals', 'Retail Investment permissions for arranging deals in investments'];
     const opts = { colHeader };
@@ -119,7 +125,7 @@ const createCSV = (data) => {
     const fs = require('fs')
     // @todo: replace hardcoded postcode for bulk processing of files.
     fs.writeFile(
-        './csv/AL1.csv',
+        './csv/' + postcode + '.csv',
         csv,
         (err) => err ? console.error('Data not written!', err) : console.log('Data written!')
     )
