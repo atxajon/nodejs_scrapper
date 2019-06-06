@@ -24,35 +24,89 @@ void (async () => {
     }];
     
     await page.setCookie(...cookies);
-    const cookiesSet = await page.cookies(url);
+
+    // Use this to debug passed in session cookie.
+    // const cookiesSet = await page.cookies(url);
     // console.log(JSON.stringify(cookiesSet));
     
     await page.waitFor('input[name=postcode]');
     // Type into postcode input.
     await page.focus('#input-8');
     // @todo: replace hardcoded with array of values.
-    page.keyboard.type('AL1');
+    page.keyboard.type('LU1');
     // Check investments checkbox.
     await page.evaluate(()=>document.querySelector('#checkbox-12').click())
     // Check pensions checkbox.
     await page.evaluate(()=>document.querySelector('#checkbox-13').click())
     // Click on search button.
+    await page.waitFor(200);
     await page.evaluate(()=>document.querySelector('.searchBtn').click())
 
     await page.waitFor('#ResultSection');
-    await page.waitFor('.slds-select');
-    // @todo: Click on show all results.
-    await page.select('.slds-select', '200')
+    // Delay to wait for results then click to return 200 results.
+    await page.waitFor(10000);
+    await page.select('.slds-large-size_6-of-12 .slds-select', '200')
 
-    await page.waitFor(19000);
-    
-    const html = await page.content();
-    const fs = require('fs')
-    fs.writeFile(
-      './test.html',
-      html,
-      (err) => err ? console.error('Data not written!', err) : console.log('Data written!')
-    )
+    await page.waitFor(10000);
+    await page.addScriptTag({url: 'https://code.jquery.com/jquery-3.3.1.slim.min.js'});
+
+    // Store values for searched postcode.
+    const scrapedData = await page.evaluate(() => {
+      function collateData(value, propertyKey) {
+        for (var i = 0; i < value.length; i++) {
+          if (propertyKey === 'link') {
+            let link = value[i].href;
+            let parsedLink = link.replace('file:///',"");
+            value[i].textContent = 'https://register.fca.org.uk/' + parsedLink;
+          }
+          if (propertyKey === 'address') {
+            // Clean out address string containing ↵ char.
+            value[i].textContent = value[i].textContent.replace(/[\n\r]/g, ''); 
+            value[i].textContent = value[i].textContent.replace(/,/g, '');
+          }
+          if (propertyKey === 'phone') {
+            // Clean out phones containing - char.
+            value[i].textContent = value[i].textContent.replace('-','');
+          }
+          allData[i][propertyKey] = value[i].textContent;
+        }
+      }
+
+      let allData = [];
+      let titleLinks = document.querySelectorAll("a.titleClass");
+      for (var i = 0; i < titleLinks.length; i++) {
+        allData.push({
+          name: titleLinks[i].textContent
+        });
+      }
+      
+      let allLinks = document.querySelectorAll(".titleClass");
+      collateData(allLinks, 'link');
+      
+      let addresses = document.querySelectorAll("td.tabledataContentStyleClass");
+      collateData(addresses, 'address');
+      
+      let phones = $(".slds-icon-utility-call").parent().next().find('.tabledataContentStyleClass');
+      collateData(phones, 'phone');
+      
+      // Firm reference number can appear more than once for each returned result: we discard page right hand side's firm ref number of authorised principal, by selecting just the element on the left, which happens to have this given class...
+      let firm_ref_no = $('.slds-p-right_large').find('td:contains("Firm reference")');
+      for (var i = 0; i < firm_ref_no.length; i++) {
+        let firm_ref_no_all_text = firm_ref_no[i].innerText;
+        let parsed_out_digits = firm_ref_no_all_text.match(/\d+/g);
+        allData[i]['firm_reference_number'] = parsed_out_digits[0];
+      }
+      
+      let status = $(".firmStatusStyleClass");
+      collateData(status, 'status');
+      
+      let emails = $(".slds-icon-utility-email").parent().next().find('.tabledataContentStyleClass');
+      collateData(emails, 'email');
+      return allData;
+    });
+
+    // Write stored values to csv file.
+    createCSV(scrapedData);
   
     // allData.push({
     //   ref_number: ref_no,
@@ -69,7 +123,7 @@ void (async () => {
     console.log(error)
   }  
   // Write all collected data to csv file.
-  //createCSV(allData);
+  // createCSV(scrapedData);
 })()
 
 
@@ -82,7 +136,7 @@ const createCSV = (data) => {
   const fs = require('fs')
   // @todo: replace hardcoded postcode for bulk processing of files.
   fs.writeFile(
-    './csv/AL1.csv',
+    './csv_by_postcode/LU1.csv',
     csv,
     (err) => err ? console.error('Data not written!', err) : console.log('Data written!')
   )
