@@ -1,19 +1,16 @@
 const puppeteer = require('puppeteer')
 const url = 'https://register.fca.org.uk/directory/s/';
 
-// const postCode = 'AL1';
-
 const settings   = require('./settings/searchedPostcodes');
 const postcodes  = settings.postcodes;
 
-// const postCodes = ['LU3', 'LU4'];
 
 void (async () => {
   let allData = [];
   try {
     // Use headless:false to debug behavior by viewing actions on chrome.
-    // const browser = await puppeteer.launch({headless: false});
-    const browser = await puppeteer.launch();
+    const browser = await puppeteer.launch({headless: false});
+    // const browser = await puppeteer.launch();
     
     // create a page inside the browser
     const page = await browser.newPage()
@@ -26,12 +23,6 @@ void (async () => {
       'name': 'renderCtx',
       'value': '%7B%22pageId%22%3A%221828c602-e8aa-4dbb-9979-311affff64c5%22%2C%22schema%22%3A%22Published%22%2C%22viewType%22%3A%22Published%22%2C%22brandingSetId%22%3A%223cacc417-eded-4cfd-994d-5a65187daf78%22%2C%22audienceIds%22%3A%226Au0X00000000vI%22%7D'
     }];
-
-    const formPostcodeInputId = '#input-8';
-    const formInvestmentsCheckboxId = '#checkbox-12';
-    const formPensionsCheckboxId = '#checkbox-13';
-    const formSearchBtn = '.searchBtn';
-    const pagerResultsSelect = '.slds-large-size_6-of-12 .slds-select';
     
     await page.setCookie(...cookies);
     await page.addScriptTag({url: 'https://code.jquery.com/jquery-3.3.1.slim.min.js'});
@@ -44,17 +35,19 @@ void (async () => {
 
     // Check investments checkbox.
     await page.evaluate(()=>document.querySelector('#checkbox-12').click())
+    // await page.evaluate(()=>document.querySelector(directorySearch.investmentsCheckbox).click())
     // Check pensions checkbox.
     await page.evaluate(()=>document.querySelector('#checkbox-13').click())
+    
+    let pagerResults = '100';
     
     for (let i = 0; i < postcodes.length; i++) {
       await page.waitFor('input[name=postcode]');
       
       // Type into postcode input.
-      // First empty any text in it.
       const elementHandle = await page.$('#input-8');
       await page.focus('#input-8');
-      // Three clicks hack to select everything in the box.
+      // First empty any text in it: three clicks hack to select everything in the box.
       await elementHandle.click({clickCount: 3});
       await elementHandle.press('Backspace');
       page.keyboard.type(postcodes[i]);
@@ -64,11 +57,21 @@ void (async () => {
       await page.evaluate(()=>document.querySelector('.searchBtn').click())
   
       await page.waitFor('#ResultSection');
-      // Delay to wait for results then click to return 200 results.
-      await page.waitFor(20000);
-      await page.select('.slds-large-size_6-of-12 .slds-select', '200')
-  
-      await page.waitFor(10000);
+      // Delay to wait for results then click to return all results.
+      await page.waitFor(12000);
+
+      /**
+       * Bug when requesting all results through pager click, steps to replicate it:
+       * Set the pager to 100 results, then after loading enter another postcode to search for,
+       * wait for results, then repeat clicking to set the pager again for the same result amount: 100.
+       * Expected result: ajax call retrieves all requested results.
+       * Actual result: page won't load the queried results and stayed in the default 10.
+       * Workaround: toggle requested paged results on each iteration.  
+       */
+      pagerResults = (pagerResults == '100' ? '200' : '100');
+      await page.select('.slds-large-size_6-of-12 .slds-select', pagerResults);
+      // Delay again after pager has been set to all results.
+      await page.waitFor(40000);
   
       // Store values for searched postcode.
       const scrapedData = await page.evaluate(() => {
