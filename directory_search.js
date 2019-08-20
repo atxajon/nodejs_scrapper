@@ -4,13 +4,11 @@ const url = 'https://register.fca.org.uk/directory/s/';
 const settings   = require('./settings/searchedPostcodes');
 const postcodes  = settings.postcodes;
 
-
 void (async () => {
-  let allData = [];
   try {
     // Use headless:false to debug behavior by viewing actions on chrome.
-    const browser = await puppeteer.launch({headless: false});
-    // const browser = await puppeteer.launch();
+    // const browser = await puppeteer.launch({headless: false});
+    const browser = await puppeteer.launch();
     
     // create a page inside the browser
     const page = await browser.newPage()
@@ -27,17 +25,16 @@ void (async () => {
     await page.setCookie(...cookies);
     await page.addScriptTag({url: 'https://code.jquery.com/jquery-3.3.1.slim.min.js'});
     
-    // Use this to debug passed in session cookie.
+    // To debug passed in session cookie:
     // const cookiesSet = await page.cookies(url);
     // console.log(JSON.stringify(cookiesSet));
     
-    await page.waitFor(2000);
+    await page.waitFor('input[value=Investment]');
 
     // Check investments checkbox.
-    await page.evaluate(()=>document.querySelector('#checkbox-12').click())
-    // await page.evaluate(()=>document.querySelector(directorySearch.investmentsCheckbox).click())
+    await page.evaluate(()=>$('input[value=Investment]').click())
     // Check pensions checkbox.
-    await page.evaluate(()=>document.querySelector('#checkbox-13').click())
+    await page.evaluate(()=>$('input[value=Pensions]').click())
     
     let pagerResults = '100';
     
@@ -45,8 +42,11 @@ void (async () => {
       await page.waitFor('input[name=postcode]');
       
       // Type into postcode input.
-      const elementHandle = await page.$('#input-8');
-      await page.focus('#input-8');
+      // const elementHandle = await page.$('#input-12');
+      const elementHandle = await page.$('input[name=postcode]');
+      // const elementHandle = await page.document.querySelector('#input-12');
+      // await page.focus('#input-12');
+      await page.focus('input[name=postcode]');
       // First empty any text in it: three clicks hack to select everything in the box.
       await elementHandle.click({clickCount: 3});
       await elementHandle.press('Backspace');
@@ -56,7 +56,6 @@ void (async () => {
       await page.waitFor(200);
       await page.evaluate(()=>document.querySelector('.searchBtn').click())
   
-      await page.waitFor('#ResultSection');
       // Delay to wait for results then click to return all results.
       await page.waitFor(12000);
 
@@ -131,24 +130,13 @@ void (async () => {
       // Write stored values to csv file.
       createCSV(scrapedData, postcodes[i]);
     }
-
     
-    // allData.push({
-    //   ref_number: ref_no,
-    //   individuals: individuals_string,
-    //   advising_on_investments: investmentsAdvice
-    // });
-    
-    
-    // all done, close this browser
+    // All done, close this browser.
     await browser.close()
   } catch (error) {
-    // if something goes wrong
-    // display the error message in console
+    // If something goes wrong display the error message in console.
     console.log(error)
   }  
-  // Write all collected data to csv file.
-  // createCSV(scrapedData);
 })()
 
 
@@ -159,7 +147,6 @@ const createCSV = (data, postcode) => {
   const json2csvParser = new Parser({ colHeader });
   const csv = json2csvParser.parse(data);
   const fs = require('fs')
-  // @todo: replace hardcoded postcode for bulk processing of files.
   fs.writeFile(
     './csv_by_postcode/' + postcode + '.csv',
     csv,
