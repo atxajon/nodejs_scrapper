@@ -79,7 +79,7 @@ void (async () => {
             if (propertyKey === 'link') {
               let link = value[i].href;
               let parsedLink = link.replace('file:///',"");
-              value[i].textContent = 'https://register.fca.org.uk/' + parsedLink;
+              value[i].textContent = parsedLink;
             }
             if (propertyKey === 'address') {
               // Clean out address string containing ↵ char.
